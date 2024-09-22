@@ -1,10 +1,8 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ConcurrentHashMap;
+import java.nio.file.Files;
 
 public class ChatServer {
 
@@ -32,6 +30,7 @@ public class ChatServer {
     public static class ClientHandler extends Thread {
 
         private final Socket socket;
+        private boolean transferringFile = false;
         private String clientName;
         private BufferedReader in;
         private PrintWriter out;
@@ -60,6 +59,11 @@ public class ChatServer {
                 // Loop para receber e tratar mensagens
                 String message;
                 while ((message = in.readLine()) != null) {
+                    if (transferringFile) {
+                        out.println("Transferência de arquivo em andamento. Aguarde até que seja concluída.");
+                        continue;
+                    }
+
                     // Comando /sair
                     if (message.equalsIgnoreCase("/sair")) {
                         break;
@@ -74,6 +78,17 @@ public class ChatServer {
                             sendMessage(recipient, msg);
                         } else {
                             out.println("Comando inválido. Use: /send message <destinatario> <mensagem>");
+                        }
+                    }
+                    // Comando /send file <destinatário> <caminho do arquivo>
+                    else if (message.startsWith("/send file")) {
+                        String[] tokens = message.split(" ", 4);
+                        if (tokens.length == 4) {
+                            String recipient = tokens[2];
+                            String filePath = tokens[3];
+                            sendFile(recipient, filePath);
+                        } else {
+                            out.println("Comando inválido. Use: /send file <destinatario> <caminho do arquivo>");
                         }
                     } else {
                         out.println("Comando não reconhecido.");
@@ -102,6 +117,43 @@ public class ChatServer {
             if (recipientHandler != null) {
                 recipientHandler.out.println(clientName + ": " + msg);
                 out.println("Mensagem enviada para " + recipient);
+            } else {
+                out.println("Usuário " + recipient + " não encontrado.");
+            }
+        }
+
+        // Método para enviar arquivo a um destinatário
+        private void sendFile(String recipient, String filePath) {
+            ClientHandler recipientHandler;
+            synchronized (clients) {
+                recipientHandler = clients.get(recipient);
+            }
+
+            if (recipientHandler != null) {
+                try {
+                    File file = new File(filePath);
+                    if (file.exists()) {
+                        transferringFile = true;
+                        out.println("Iniciando transferência de arquivo...");
+
+                        recipientHandler.out.println("/file " + file.getName() + "|" + file.length());
+
+                        byte[] fileBytes = Files.readAllBytes(file.toPath());
+                        OutputStream recipientOut = recipientHandler.socket.getOutputStream();
+                        recipientOut.write(fileBytes);
+                        recipientOut.flush();
+
+                        out.println("Arquivo enviado para " + recipient);
+                        recipientHandler.out.println("Arquivo recebido.");
+
+                        transferringFile = false;
+                    } else {
+                        out.println("Arquivo não encontrado: " + filePath);
+                    }
+                } catch (IOException e) {
+                    out.println("Erro ao enviar o arquivo: " + e.getMessage());
+                    transferringFile = false;
+                }
             } else {
                 out.println("Usuário " + recipient + " não encontrado.");
             }
