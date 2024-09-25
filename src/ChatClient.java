@@ -1,5 +1,5 @@
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
 
 public class ChatClient {
 
@@ -54,13 +54,46 @@ public class ChatClient {
         public void run() {
             try {
                 String messageFromServer;
-                // Loop para receber e exibir mensagens do servidor
                 while ((messageFromServer = in.readLine()) != null) {
-                    System.out.println(messageFromServer);
+                    if (messageFromServer.startsWith("/file")) {
+                        String[] fileInfo = messageFromServer.split("\\|");
+                        if (fileInfo.length == 2) {
+                            String fileName = fileInfo[0].substring(6); // Remove "/file " do início
+                            long fileSize = Long.parseLong(fileInfo[1]);
+
+                            receiveFileWithProgress(fileName, fileSize);
+                        } else {
+                            System.out.println("Formato de mensagem de arquivo inválido.");
+                        }
+                    } else {
+                        System.out.println(messageFromServer);
+                    }
                 }
             } catch (IOException e) {
-                System.out.println("Conexão com o servidor foi encerrada.");
+                System.out.println("Erro ao receber mensagem do servidor: " + e.getMessage());
             }
+        }
+
+        private void receiveFileWithProgress(String fileName, long fileSize) throws IOException {
+            byte[] buffer = new byte[4096];
+            FileOutputStream fos = new FileOutputStream(fileName);
+            InputStream inputStream = socket.getInputStream();
+
+            long bytesReceived = 0;
+            int bytesRead;
+
+            System.out.println("Recebendo arquivo: " + fileName);
+
+            while (bytesReceived < fileSize && (bytesRead = inputStream.read(buffer, 0, buffer.length)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+                bytesReceived += bytesRead;
+
+                int progress = (int) ((bytesReceived * 100) / fileSize);
+                System.out.print("\rProgresso: " + Math.min(progress, 100) + "%");
+            }
+
+            fos.close();
+            System.out.println("\nArquivo recebido: " + fileName);
         }
     }
 
