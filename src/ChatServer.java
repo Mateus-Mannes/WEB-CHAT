@@ -1,6 +1,8 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import java.nio.file.Files;
 
@@ -8,14 +10,24 @@ public class ChatServer {
 
     private static final int SERVER_PORT = 8080;
     private static final ConcurrentHashMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
-
+    private static PrintWriter logWriter;
+    
     public static void main(String[] args) {
+        // Cria o log de conexões
+        try {
+            logWriter = new PrintWriter(new FileWriter("chat_server_log.txt", true));
+        } catch (IOException e) {
+            System.out.println("Erro ao criar arquivo de log: " + e.getMessage());
+            return;
+        }
+
         try (ServerSocket serverSocket = new ServerSocket(SERVER_PORT)) {
             System.out.println("Servidor iniciado na porta " + SERVER_PORT);
 
             // Loop infinito para aceitar conexões de novos clientes
             while (true) {
                 Socket clientSocket = serverSocket.accept();
+                String clientAddress = clientSocket.getInetAddress().toString();
                 System.out.println("Novo cliente conectado: " + clientSocket.getInetAddress());
 
                 // Cria uma nova thread para lidar com o cliente
@@ -24,6 +36,12 @@ public class ChatServer {
             }
         } catch (IOException e) {
             System.out.println("Erro ao iniciar o servidor: " + e.getMessage());
+            logWriter.println(getTimestamp() + " Erro ao iniciar o servidor: " + e.getMessage());
+            logWriter.flush();
+        } finally {
+            if (logWriter != null) {
+                logWriter.close();
+            }
         }
     }
 
@@ -46,7 +64,7 @@ public class ChatServer {
                 out = new PrintWriter(socket.getOutputStream(), true);
 
                 // Solicita o nome do cliente
-                out.println("Digite seu nome e em seguida suas mensagens: ");
+                out.println("Digite seu nome, confirme com [ENTER] e em seguida envie suas mensagens ou comandos: ");
                 clientName = in.readLine();
 
                 // Adiciona o cliente à lista de conectados
@@ -55,6 +73,8 @@ public class ChatServer {
                 }
 
                 System.out.println(clientName + " entrou no chat.");
+                logWriter.println(getTimestamp() + " " + clientName + " (IP: " + socket.getInetAddress() + ") entrou no chat.");
+                logWriter.flush();
 
                 // Loop para receber e tratar mensagens
                 String message;
@@ -80,6 +100,17 @@ public class ChatServer {
                             out.println("Comando inválido. Use: /send message <destinatario> <mensagem>");
                         }
                     }
+
+                    // Lista os usuários conectados
+                    else if (message.equalsIgnoreCase("/users")){
+                        out.println("Usuários conectados:");
+                        synchronized (clients) {
+                            for(String user : clients.keySet()) {
+                                out.println("- " + user);
+                            }
+                        }
+                    }
+                    
                     // Comando /send file <destinatário> <caminho do arquivo>
                     else if (message.startsWith("/send file")) {
                         String[] tokens = message.split(" ", 4);
@@ -103,6 +134,8 @@ public class ChatServer {
                         clients.remove(clientName);
                     }
                     System.out.println(clientName + " saiu do chat.");
+                    logWriter.println(getTimestamp() + " " + clientName + " (IP: " + socket.getInetAddress() + ") saiu do chat.");
+                    logWriter.flush();
                     closeConnection();
                 }
             }
@@ -171,4 +204,8 @@ public class ChatServer {
         }
     }
 
+    // Método para obter o timestamp atual
+    private static String getTimestamp() {
+        return new SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new Date());
+    }
 }
