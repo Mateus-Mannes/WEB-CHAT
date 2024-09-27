@@ -2,6 +2,8 @@
 
 Trabalho desenvolvido para a matéria de PROGRAMAÇÃO PARA DISPOSITIVOS MÓVEIS na UDESC
 
+Alunos: Jordan Nogueira, Mateus Mannes e Patrick Plácido
+
 # Como usar
 
 Para poder começar a usar as funcionalidades do chat, execute o arquivo ChatServer.java e em seguida execute o ChatClient.java
